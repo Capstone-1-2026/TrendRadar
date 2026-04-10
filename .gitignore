@@ -23,3 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 .vite
+
+# .gitignore에 추가
+.env
+*.env
+__pycache__/
+*.pyc
+venv/
+.venv/
