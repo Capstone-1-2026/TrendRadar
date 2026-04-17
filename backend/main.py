@@ -1,17 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from api.trends import router as trends_router
 
-app = FastAPI(title="TrendRadar API", description="API for TrendRadar backend")
+app = FastAPI(
+    title="TrendRadar API",
+    description="한국 소비 트렌드 분석 플랫폼 백엔드",
+    version="0.1.0"
+)
 
-# CORS middleware config
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production
+    allow_origins=["http://localhost:5173"],  # Vite 기본 포트
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
+
+
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to TrendRadar API"}
+def root():
+    return {"message": "TrendRadar API 서버 정상 작동 중 🚀"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
