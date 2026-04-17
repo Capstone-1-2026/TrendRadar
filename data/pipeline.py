@@ -1,3 +1,5 @@
+# /Users/apple/TrendRadar/data/pipeline.py
+
 import os
 import pandas as pd
 import numpy as np
@@ -47,12 +49,14 @@ def calculate_trend_score(
     naver: float, youtube: float, season_factor: float = 1.0
 ) -> float:
     """
-    Trend Score 계산
+    Trend Score 계산 (0~100 스케일)
     네이버 50% + YouTube 30% + 계절 보정 20%
+    naver, youtube 모두 0~100 스케일 기준
     """
-    naver_w = (naver or 0) * 0.5
-    youtube_w = (youtube or 0) * 0.3
+    naver_w = min(naver or 0, 100.0) * 0.5
+    youtube_w = min(youtube or 0, 100.0) * 0.3
     season_w = season_factor * 0.2 * 100
+
     return round(naver_w + youtube_w + season_w, 2)
 
 
