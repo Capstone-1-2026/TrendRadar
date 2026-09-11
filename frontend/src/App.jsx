@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { ThemeProvider } from './context/ThemeContext'
+import { useTheme } from './context/theme'
 import Sidebar from './components/layout/Sidebar'
 import Header from './components/layout/Header'
 import Dashboard from './pages/Dashboard'
@@ -12,9 +13,9 @@ function AppLayout() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const pageMap = {
-    dashboard: <Dashboard setPage={setPage} />,
-    history: <History />,
-    ai: <AIPrediction />,
+    dashboard: <Dashboard searchQuery={searchQuery} />,
+    history: <History searchQuery={searchQuery} />,
+    ai: <AIPrediction searchQuery={searchQuery} />,
   }
 
   return (
@@ -23,7 +24,7 @@ function AppLayout() {
       <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
       <main style={{ marginLeft: 220, paddingTop: 58, minHeight: '100vh' }}>
         <div style={{ padding: 22 }}>
-          {pageMap[page] || <Dashboard setPage={setPage} />}
+          {pageMap[page] || <Dashboard searchQuery={searchQuery} />}
         </div>
       </main>
     </div>

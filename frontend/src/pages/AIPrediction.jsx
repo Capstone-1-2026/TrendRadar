@@ -1,18 +1,31 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { useTheme } from '../context/ThemeContext'
-import { PREDICTIONS, getProbBadge } from '../data/predictions'
-import { catLabelMap } from '../data/keywords'
+import { useTheme } from '../context/theme'
+import { getPredictions, getProbBadge } from '../api/trends'
 import Card from '../components/common/Card'
 import Badge from '../components/common/Badge'
 import ProgressBar from '../components/common/ProgressBar'
 import SectionTitle from '../components/common/SectionTitle'
+import StateMessage from '../components/common/StateMessage'
 import WordCloud from '../components/common/WordCloud'
 import { Icons, catIconMap } from '../components/icons/Icons'
 
+const CAT_LABEL_MAP = {
+    food: '음식', snack: '음식', drink: '음식',
+    fashion: '패션', content: '콘텐츠',
+    technology: '기술', lifestyle: '라이프',
+}
+const matchesSearch = (item, query) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return [item.name, item.cat, CAT_LABEL_MAP[item.cat], item.analysis]
+        .filter(Boolean)
+        .some(value => value.toLowerCase().includes(q))
+}
+
 function PredBarShape(props) {
     const { T } = useTheme()
-    const { x, y, width, height, fill, name } = props
+    const { x, y, width, height, fill } = props
     const selected = props.selected
     return (
         <g>
@@ -37,7 +50,7 @@ function PredTooltip({ active, payload }) {
             borderRadius: 8, padding: '9px 13px', boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
         }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.name}</p>
-            <p style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{catLabelMap[d.cat] || d.cat} · 스코어 {d.score}</p>
+            <p style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{CAT_LABEL_MAP[d.cat] || d.cat} · 스코어 {d.score}</p>
             <p style={{ fontSize: 12, color: T.catColors[d.cat] || T.up, marginTop: 4 }}>
                 예측 확률: <strong>{d.prob}%</strong>
             </p>
@@ -45,23 +58,48 @@ function PredTooltip({ active, payload }) {
     )
 }
 
-export default function AIPrediction() {
+export default function AIPrediction({ searchQuery = '' }) {
     const { T } = useTheme()
+    const [predictions, setPredictions] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [selectedId, setSelectedId] = useState(null)
     const detailRef = useRef(null)
+
+    useEffect(() => {
+        let alive = true
+
+        async function loadPredictions() {
+            setLoading(true)
+            setError(null)
+            try {
+                const items = await getPredictions()
+                if (!alive) return
+                setPredictions(items)
+            } catch (err) {
+                if (alive) setError(err.message || '데이터를 불러오지 못했습니다.')
+            } finally {
+                if (alive) setLoading(false)
+            }
+        }
+
+        loadPredictions()
+        return () => { alive = false }
+    }, [])
 
     const handleBarClick = useCallback(data => {
         if (!data) return
         const id = data.activePayload?.[0]?.payload?.id
         if (!id) return
         setSelectedId(prev => prev === id ? null : id)
-    }, [])
+    }, [setSelectedId])
 
     const handleWordClick = useCallback(id => {
         setSelectedId(prev => prev === id ? null : id)
-    }, [])
+    }, [setSelectedId])
 
-    const selected = PREDICTIONS.find(p => p.id === selectedId)
+    const visiblePredictions = predictions.filter(item => matchesSearch(item, searchQuery))
+    const selected = visiblePredictions.find(p => p.id === selectedId)
     const badge = selected ? getProbBadge(selected.prob) : null
 
     useEffect(() => {
@@ -72,11 +110,35 @@ export default function AIPrediction() {
         }
     }, [selectedId])
 
-    const wcItems = PREDICTIONS.map(p => ({
+    const wcItems = visiblePredictions.map(p => ({
         id: p.id, name: p.name,
         size: Math.round(10 + (p.prob / 100) * 26),
         color: T.catColors[p.cat] || T.muted,
     }))
+
+    if (loading) {
+        return (
+            <StateMessage>예측 데이터를 불러오는 중입니다.</StateMessage>
+        )
+    }
+
+    if (error) {
+        return (
+            <StateMessage tone="error">{error}</StateMessage>
+        )
+    }
+
+    if (!predictions.length) {
+        return (
+            <StateMessage>표시할 예측 데이터가 없습니다.</StateMessage>
+        )
+    }
+
+    if (searchQuery.trim() && !visiblePredictions.length) {
+        return (
+            <StateMessage>"{searchQuery}" 검색 결과가 없습니다.</StateMessage>
+        )
+    }
 
     return (
         <div>
@@ -103,7 +165,7 @@ export default function AIPrediction() {
                 <div style={{ height: 340 }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                            data={PREDICTIONS} layout="vertical"
+                            data={visiblePredictions} layout="vertical"
                             margin={{ top: 4, right: 56, left: 84, bottom: 4 }}
                             onClick={handleBarClick} style={{ cursor: 'pointer' }}
                         >
@@ -116,7 +178,7 @@ export default function AIPrediction() {
                                 shape={props => <PredBarShape {...props} selected={props.name === selected?.name} />}
                                 isAnimationActive animationDuration={900}
                             >
-                                {PREDICTIONS.map(p => (
+                                {visiblePredictions.map(p => (
                                     <Cell key={p.id}
                                         fill={T.catColors[p.cat] || T.muted}
                                         opacity={selectedId && p.id !== selectedId ? 0.35 : 1}
@@ -151,7 +213,7 @@ export default function AIPrediction() {
                                     {(() => { const CI = catIconMap[selected.cat] || Icons.Tag; return <CI size={20} color={T.catColors[selected.cat]} /> })()}
                                     <div>
                                         <p style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{selected.name}</p>
-                                        <Badge color={T.catColors[selected.cat] || T.muted}>{catLabelMap[selected.cat] || selected.cat}</Badge>
+                                        <Badge color={T.catColors[selected.cat] || T.muted}>{CAT_LABEL_MAP[selected.cat] || selected.cat}</Badge>
                                     </div>
                                 </div>
                                 <button

@@ -1,4 +1,4 @@
-import { useTheme } from '../../context/ThemeContext'
+import { useTheme } from '../../context/theme'
 import { Icons } from '../icons/Icons'
 
 const NAV_ITEMS = [

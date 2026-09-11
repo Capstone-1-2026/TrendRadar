@@ -1,13 +1,26 @@
-import { useState } from 'react'
-import { useTheme } from '../context/ThemeContext'
-import { KEYWORDS, catLabelMap } from '../data/keywords'
+import { useEffect, useState } from 'react'
+import { useTheme } from '../context/theme'
+import { getDeclineSummary, getHistory } from '../api/trends'
 import Card from '../components/common/Card'
 import Badge from '../components/common/Badge'
 import ProgressBar from '../components/common/ProgressBar'
 import SectionTitle from '../components/common/SectionTitle'
+import StateMessage from '../components/common/StateMessage'
 import { Icons, catIconMap } from '../components/icons/Icons'
 
 const HALO_CAUSES = ['대체재 등장', '계절 종료', '공급 과잉', '부정 이슈', '자연 소멸']
+const CAT_LABEL_MAP = {
+    food: '음식', snack: '음식', drink: '음식',
+    fashion: '패션', content: '콘텐츠',
+    technology: '기술', lifestyle: '라이프',
+}
+const matchesSearch = (item, query) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return [item.name, item.cat, CAT_LABEL_MAP[item.cat]]
+        .filter(Boolean)
+        .some(value => value.toLowerCase().includes(q))
+}
 const SOURCE_TIPS = {
     '네이버 DataLab': '네이버 검색 데이터 기반 트렌드 지수 (search.naver.com/datalab)',
     'YouTube': 'YouTube 검색 및 조회수 기반 분석 (youtube.com/trends)',
@@ -20,7 +33,8 @@ function HistoryKeywordCard({ kw }) {
     const [tipSource, setTipSource] = useState(null)
     const catKey = kw.cat === 'snack' || kw.cat === 'drink' ? 'food' : kw.cat
     const CatIcon = catIconMap[kw.cat] || Icons.Tag
-    const summary = `${kw.name}은(는) ${kw.year}년 ${catLabelMap[kw.cat] || kw.cat} 카테고리에서 최고 스코어 ${kw.peak}점을 기록했습니다. SNS 중심 확산 이후 빠르게 대중화되었으나, 경쟁 제품 등장과 함께 관심이 감소하기 시작했습니다.`
+    const period = kw.month ? `${kw.year}년 ${kw.month}월` : `${kw.year}년`
+    const summary = `${kw.name}은(는) ${period} ${CAT_LABEL_MAP[kw.cat] || kw.cat} 카테고리에서 최고 스코어 ${kw.peak}점을 기록했습니다. SNS 중심 확산 이후 빠르게 대중화되었으나, 경쟁 제품 등장과 함께 관심이 감소하기 시작했습니다.`
     const cause = HALO_CAUSES[kw.id % HALO_CAUSES.length]
     const dropRate = Math.round((100 - kw.peak * 0.6) * 0.4 + 10)
     const sources = [
@@ -47,7 +61,7 @@ function HistoryKeywordCard({ kw }) {
                 <CatIcon size={18} color={T.catColors[catKey]} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{kw.name}</p>
-                    <p style={{ fontSize: 11, color: T.muted }}>{kw.cat} · {kw.year}년</p>
+                    <p style={{ fontSize: 11, color: T.muted }}>{kw.cat} · {period}</p>
                     <div style={{ marginTop: 7 }}>
                         <ProgressBar value={kw.peak} color={T.catColors[catKey] || T.up} height={4} bg={T.bg} />
                     </div>
@@ -137,7 +151,7 @@ function getSelStyle(T) {
     }
 }
 
-export default function History() {
+export default function History({ searchQuery = '' }) {
     const { T } = useTheme()
     const CATS = ['전체', 'food', 'fashion', 'content', 'technology', 'lifestyle']
     const catDisplayName = { '전체': '전체', food: '음식', fashion: '패션', content: '콘텐츠', technology: '기술', lifestyle: '라이프' }
@@ -152,20 +166,43 @@ export default function History() {
     const [selCat, setSelCat] = useState('전체')
     const [selYear, setSelYear] = useState('전체')
     const [selMonth, setSelMonth] = useState('전체')
+    const [filtered, setFiltered] = useState([])
+    const [declineSummary, setDeclineSummary] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
 
-    const filtered = KEYWORDS.filter(kw => {
-        const k = kw.cat === 'snack' || kw.cat === 'drink' ? 'food' : kw.cat
-        return (selCat === '전체' || k === selCat) && (selYear === '전체' || kw.year === Number(selYear))
-    })
+    useEffect(() => {
+        let alive = true
 
-    const catSummary = CATS.filter(c => c !== '전체').map(c => {
-        const items = KEYWORDS.filter(kw => {
-            const k = kw.cat === 'snack' || kw.cat === 'drink' ? 'food' : kw.cat
-            return k === c
-        })
-        const avg = items.length ? Math.round(items.reduce((s, k) => s + k.peak, 0) / items.length) : 0
-        return { cat: c, avg, count: items.length }
-    })
+        async function loadHistory() {
+            setLoading(true)
+            setError(null)
+            try {
+                const [items, summary] = await Promise.all([
+                    getHistory({
+                        cat: selCat === '전체' ? undefined : selCat,
+                        year: selYear === '전체' ? undefined : selYear,
+                        month: selMonth === '전체' ? undefined : selMonth,
+                    }),
+                    getDeclineSummary(),
+                ])
+                if (!alive) return
+                setFiltered(items.filter(item => matchesSearch(item, searchQuery)))
+                setDeclineSummary(summary)
+            } catch (err) {
+                if (alive) setError(err.message || '데이터를 불러오지 못했습니다.')
+            } finally {
+                if (alive) setLoading(false)
+            }
+        }
+
+        loadHistory()
+        return () => { alive = false }
+    }, [searchQuery, selCat, selYear, selMonth])
+
+    const catSummary = CATS.filter(c => c !== '전체').map(c => (
+        declineSummary.find(item => item.cat === c) || { cat: c, avg: 0, count: 0 }
+    ))
 
     const btnBase = (active, c) => ({
         padding: '5px 12px', borderRadius: 6,
@@ -261,11 +298,17 @@ export default function History() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                {filtered.map(kw => <HistoryKeywordCard key={kw.id} kw={kw} />)}
-                {filtered.length === 0 && (
-                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: T.muted, fontSize: 14 }}>
-                        해당 조건의 트렌드가 없습니다.
-                    </div>
+                {loading && (
+                    <StateMessage gridColumn="1/-1">트렌드 히스토리를 불러오는 중입니다.</StateMessage>
+                )}
+                {error && (
+                    <StateMessage tone="error" gridColumn="1/-1">{error}</StateMessage>
+                )}
+                {!loading && !error && filtered.map(kw => <HistoryKeywordCard key={kw.id} kw={kw} />)}
+                {!loading && !error && filtered.length === 0 && (
+                    <StateMessage gridColumn="1/-1">
+                        {searchQuery.trim() ? `"${searchQuery}" 검색 결과가 없습니다.` : '해당 조건의 트렌드가 없습니다.'}
+                    </StateMessage>
                 )}
             </div>
         </div>

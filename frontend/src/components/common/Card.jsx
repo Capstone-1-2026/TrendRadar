@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTheme } from '../../context/ThemeContext'
+import { useTheme } from '../../context/theme'
 
 export default function Card({ children, style = {}, onClick, hoverable, id }) {
     const { T } = useTheme()

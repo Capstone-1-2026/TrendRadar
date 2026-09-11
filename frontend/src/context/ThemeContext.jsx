@@ -1,11 +1,6 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { LIGHT_THEME, DARK_THEME } from '../theme/tokens'
-
-export const ThemeContext = createContext({
-  T: LIGHT_THEME, dark: false, toggleDark: () => {}
-})
-
-export const useTheme = () => useContext(ThemeContext)
+import { ThemeContext } from './theme'
 
 export function ThemeProvider({ children }) {
   const [dark, setDark] = useState(false)
@@ -20,7 +15,7 @@ export function ThemeProvider({ children }) {
     } else {
       document.documentElement.classList.remove('dark-mode')
     }
-  }, [dark])
+  }, [dark, theme.bg, theme.text])
 
   return (
     <ThemeContext.Provider value={{ T: theme, dark, toggleDark }}>
