@@ -31,6 +31,8 @@ const matchesSearch = (item, query) => {
         .some(value => value.toLowerCase().includes(q))
 }
 
+const trendScore = item => item.score ?? 0
+
 export default function Dashboard({ searchQuery = '' }) {
     const { T } = useTheme()
     const now = useNow()
@@ -40,7 +42,7 @@ export default function Dashboard({ searchQuery = '' }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const visibleKeywords = keywords.filter(kw => matchesSearch(kw, searchQuery))
-    const ranking = [...visibleKeywords].sort((a, b) => b.peak - a.peak)
+    const ranking = [...visibleKeywords].sort((a, b) => (b.change_rate ?? 0) - (a.change_rate ?? 0) || trendScore(b) - trendScore(a))
     const [activeLines, setActiveLines] = useState({})
     const [chartMounted, setChartMounted] = useState(false)
     const [zoomDomain, setZoomDomain] = useState(null)
@@ -94,14 +96,14 @@ export default function Dashboard({ searchQuery = '' }) {
         return series.slice(l, r + 1)
     }, [series, zoomDomain])
 
-    const avgScore = visibleKeywords.length ? Math.round(visibleKeywords.reduce((s, k) => s + k.peak, 0) / visibleKeywords.length) : 0
-    const upCount = visibleKeywords.filter(k => k.peak >= 90).length
-    const downCount = visibleKeywords.filter(k => k.peak < 85).length
+    const avgScore = visibleKeywords.length ? Math.round(visibleKeywords.reduce((s, k) => s + trendScore(k), 0) / visibleKeywords.length) : 0
+    const upCount = visibleKeywords.filter(k => (k.change_rate ?? 0) >= 20).length
+    const downCount = visibleKeywords.filter(k => (k.change_rate ?? 0) < 0).length
 
     const wcItems = visibleKeywords.map(kw => ({
         id: kw.id, name: kw.name,
-        size: Math.round(11 + (kw.peak / 100) * 24),
-        color: kw.peak >= 90 ? T.up : kw.peak >= 85 ? T.accent : T.muted,
+        size: Math.round(11 + (trendScore(kw) / 100) * 24),
+        color: (kw.change_rate ?? 0) >= 20 ? T.up : trendScore(kw) >= 75 ? T.accent : T.muted,
     }))
 
     const handleZoomSelect = (e) => {
@@ -222,8 +224,8 @@ export default function Dashboard({ searchQuery = '' }) {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                         <SectionTitle
                             icon={<Icons.History size={15} color={T.accent} />}
-                            title="트렌드 스코어 타임라인"
-                            sub="최근 5년 월별 트렌드 변화 추이 · 드래그로 구간 확대"
+                            title="현재 트렌드 상승 추이"
+                            sub="최근 6개월 월별 트렌드 변화 · 드래그로 구간 확대"
                         />
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                             {zoomDomain && (
@@ -313,7 +315,7 @@ export default function Dashboard({ searchQuery = '' }) {
                 {/* 실시간 랭킹 */}
                 <Card id="ranking-section">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <SectionTitle icon={<Icons.Trophy size={14} color={T.accent} />} title="실시간 랭킹" />
+                        <SectionTitle icon={<Icons.Trophy size={14} color={T.accent} />} title="실시간 급상승" />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: T.muted, fontSize: 10 }}>
                             <Icons.Clock size={11} color={T.muted} /><span>{now}</span>
                         </div>
@@ -321,8 +323,8 @@ export default function Dashboard({ searchQuery = '' }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {ranking.map((kw, i) => {
                             const CatIcon = catIconMap[kw.cat] || Icons.Tag
-                            const isUp = kw.peak >= 90
-                            const isDown = kw.peak < 85
+                            const isUp = (kw.change_rate ?? 0) >= 20
+                            const isDown = (kw.change_rate ?? 0) < 0
                             const arrowColor = isUp ? T.up : isDown ? T.down : T.neutral
                             const ArrowIcon = isUp ? Icons.TrendUp : isDown ? Icons.TrendDown : null
                             const rankColors = ['#7C6FF7', '#C084FC', '#F5A623']
@@ -345,10 +347,13 @@ export default function Dashboard({ searchQuery = '' }) {
                                         color: i < 3 ? rankColors[i] : T.muted,
                                     }}>{i + 1}</div>
                                     <CatIcon size={13} color={T.catColors[kw.cat]} />
-                                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: T.text }}>{kw.name}</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.text }}>{kw.name}</span>
+                                        <span style={{ display: 'block', fontSize: 10, color: T.muted }}>현재 {trendScore(kw)}점</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
                                         {ArrowIcon && <ArrowIcon size={11} color={arrowColor} />}
-                                        <span style={{ fontSize: 12, fontWeight: 700, color: arrowColor }}>{kw.peak}</span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: arrowColor }}>{(kw.change_rate ?? 0) > 0 ? '+' : ''}{kw.change_rate ?? 0}%</span>
                                     </div>
                                 </div>
                             )
@@ -360,11 +365,11 @@ export default function Dashboard({ searchQuery = '' }) {
             {/* 하단 2열: 워드클라우드 + 카테고리 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 <Card>
-                    <SectionTitle icon={<Icons.Radar size={15} color={T.accent} />} title="트렌드 사이클" sub="스코어 비례 글자 크기" />
+                    <SectionTitle icon={<Icons.Radar size={15} color={T.accent} />} title="현재 트렌드 클라우드" sub="현재 스코어 비례 글자 크기" />
                     <WordCloud items={wcItems} />
                 </Card>
                 <Card>
-                    <SectionTitle icon={<Icons.Box size={15} color={T.accent} />} title="카테고리별 트렌드" sub="카테고리 평균 트렌드 스코어" />
+                    <SectionTitle icon={<Icons.Box size={15} color={T.accent} />} title="카테고리별 현재 트렌드" sub="카테고리 평균 현재 스코어" />
                     <div style={{ height: 200 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={catAvgs} layout="vertical" margin={{ top: 4, right: 28, left: 18, bottom: 4 }}>

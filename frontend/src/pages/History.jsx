@@ -34,9 +34,9 @@ function HistoryKeywordCard({ kw }) {
     const catKey = kw.cat === 'snack' || kw.cat === 'drink' ? 'food' : kw.cat
     const CatIcon = catIconMap[kw.cat] || Icons.Tag
     const period = kw.month ? `${kw.year}년 ${kw.month}월` : `${kw.year}년`
-    const summary = `${kw.name}은(는) ${period} ${CAT_LABEL_MAP[kw.cat] || kw.cat} 카테고리에서 최고 스코어 ${kw.peak}점을 기록했습니다. SNS 중심 확산 이후 빠르게 대중화되었으나, 경쟁 제품 등장과 함께 관심이 감소하기 시작했습니다.`
-    const cause = HALO_CAUSES[kw.id % HALO_CAUSES.length]
-    const dropRate = Math.round((100 - kw.peak * 0.6) * 0.4 + 10)
+    const summary = kw.summary || `${kw.name}은(는) ${period} ${CAT_LABEL_MAP[kw.cat] || kw.cat} 카테고리에서 최고 스코어 ${kw.peak}점을 기록했습니다. SNS 중심 확산 이후 빠르게 대중화되었으나, 경쟁 제품 등장과 함께 관심이 감소하기 시작했습니다.`
+    const cause = kw.decline_cause || HALO_CAUSES[kw.id % HALO_CAUSES.length]
+    const dropRate = kw.drop_rate ?? Math.round((100 - kw.peak * 0.6) * 0.4 + 10)
     const sources = [
         { name: '네이버 DataLab', pct: 50, color: '#34D399' },
         { name: 'YouTube', pct: 30, color: '#F07B8A' },

@@ -1,43 +1,43 @@
 export const PREDICTIONS = [
     {
-        id: 1, name: '두바이초콜릿', cat: 'food', prob: 82, score: 85,
-        analysis: 'SNS 확산 속도와 검색량 증가율을 기반으로 높은 유행 가능성을 보입니다. 특히 20대 여성층에서 급격한 관심 증가가 감지되었으며, 글로벌 트렌드 연계성도 높게 나타났습니다.'
+        id: 101, name: '단백질 디저트', cat: 'food', prob: 84, score: 82,
+        analysis: '고단백 간식과 저당 디저트 관심이 함께 상승하고 있어 편의점, 카페, 홈트 소비층으로 확산 가능성이 높습니다.'
     },
     {
-        id: 2, name: 'AI피부진단', cat: 'technology', prob: 76, score: 79,
-        analysis: 'AI 기술 접목 미용 서비스 수요가 꾸준히 증가하고 있습니다. 뷰티 앱 다운로드 수와 관련 콘텐츠 소비량이 전년 대비 40% 이상 상승했습니다.'
+        id: 102, name: 'AI 쇼핑비서', cat: 'technology', prob: 79, score: 77,
+        analysis: '가격 비교, 사이즈 추천, 리뷰 요약 기능이 커머스 앱에 빠르게 붙으면서 개인화 쇼핑 도우미 수요가 커지고 있습니다.'
     },
     {
-        id: 3, name: '하이볼칵테일', cat: 'food', prob: 68, score: 72,
-        analysis: '홈술 문화의 확장과 함께 프리미엄 혼술 키워드가 부상하고 있습니다. 편의점 하이볼 상품 판매량이 전년 동기 대비 62% 증가했습니다.'
+        id: 103, name: '로컬 러닝크루', cat: 'lifestyle', prob: 72, score: 74,
+        analysis: '지역 기반 운동 모임과 기록 공유 문화가 결합되며 커뮤니티형 라이프스타일 트렌드로 성장할 가능성이 있습니다.'
     },
     {
-        id: 4, name: '미니멀패션', cat: 'fashion', prob: 61, score: 65,
-        analysis: '과잉 소비 반작용으로 간결하고 기능적인 스타일 수요가 증가하는 추세입니다.'
+        id: 104, name: '업사이클링 패션', cat: 'fashion', prob: 65, score: 68,
+        analysis: '친환경 소비와 개성 있는 리폼 콘텐츠가 맞물리며 소규모 브랜드와 중고 플랫폼 중심으로 확산될 수 있습니다.'
     },
     {
-        id: 5, name: '버추얼인플루언서', cat: 'content', prob: 54, score: 58,
-        analysis: 'AI 생성 가상 인물에 대한 관심이 높아지고 있으나 아직 주류 단계는 아닙니다.'
+        id: 105, name: '초단편 드라마', cat: 'content', prob: 58, score: 62,
+        analysis: '숏폼 플랫폼에서 회차형 콘텐츠 소비가 늘면서 짧은 러닝타임의 연속극 포맷이 더 넓어질 가능성이 있습니다.'
     },
     {
-        id: 6, name: '제로웨이스트쿡', cat: 'lifestyle', prob: 47, score: 51,
-        analysis: '친환경 인식 확산에 따른 요리 트렌드로 관심은 있으나 실천율은 아직 낮은 편입니다.'
+        id: 106, name: '슬립테크 루틴', cat: 'technology', prob: 49, score: 54,
+        analysis: '수면 측정 기기와 회복 중심 건강 관리 앱이 늘고 있으나 일상 사용 습관으로 자리 잡는지가 관건입니다.'
     },
     {
-        id: 7, name: '레트로게임카페', cat: 'content', prob: 39, score: 44,
-        analysis: 'Y2K 감성의 연장선으로 향수를 자극하는 오프라인 공간에 대한 수요가 있습니다.'
+        id: 107, name: '무알코올 페어링', cat: 'food', prob: 42, score: 47,
+        analysis: '저도수/무알코올 음료 관심은 꾸준하지만 외식 메뉴와 함께 소비되는 문화로 확장될지는 더 확인이 필요합니다.'
     },
     {
-        id: 8, name: '비건베이킹', cat: 'food', prob: 31, score: 36,
-        analysis: '건강·윤리 소비 트렌드와 맞닿아 있으나 국내 소비자 수용도가 아직 낮습니다.'
+        id: 108, name: '책맥 모임', cat: 'lifestyle', prob: 34, score: 39,
+        analysis: '독서 모임과 가벼운 취향 커뮤니티가 결합된 형태로 니치 수요는 있으나 대중 확산은 아직 제한적입니다.'
     },
     {
-        id: 9, name: '스페이스코어패션', cat: 'fashion', prob: 22, score: 27,
-        analysis: '해외 패션 위크에서 등장하고 있으나 국내 트렌드 반영까지는 시간이 필요합니다.'
+        id: 109, name: 'AI 아바타 팬덤', cat: 'content', prob: 27, score: 31,
+        analysis: '기술 관심은 높지만 지속적인 팬덤 소비로 이어지려면 캐릭터성과 서사가 더 필요합니다.'
     },
     {
-        id: 10, name: '달팽이슬라임', cat: 'lifestyle', prob: 14, score: 18,
-        analysis: '해외 숏폼에서 간헐적으로 바이럴되고 있으나 국내 확산 사례는 미미합니다.'
+        id: 110, name: '스마트 텃밭', cat: 'lifestyle', prob: 18, score: 24,
+        analysis: '홈가드닝과 IoT가 맞닿아 있으나 설치 비용과 관리 난도가 있어 단기 대중화 가능성은 낮습니다.'
     },
 ]
 

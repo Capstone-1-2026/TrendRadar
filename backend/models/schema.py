@@ -1,10 +1,11 @@
 from sqlalchemy import (
     Column, Integer, String, Float, Date,
-    DateTime, Text, ForeignKey, func
+    DateTime, Text, ForeignKey, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from database import Base
 from pydantic import BaseModel
+from typing import Optional
 
 
 # ── SQLAlchemy DB 테이블 모델 ──────────────────────────────────
@@ -31,6 +32,9 @@ class TrendKeyword(Base):
 
 class TrendHistory(Base):
     __tablename__ = "trend_history"
+    __table_args__ = (
+        UniqueConstraint("keyword_id", "date", name="uq_trend_history_keyword_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     keyword_id = Column(Integer, ForeignKey("trend_keywords.id"), nullable=False)
@@ -67,6 +71,9 @@ class TrendRealtime(Base):
 
 class TrendPrediction(Base):
     __tablename__ = "trend_predictions"
+    __table_args__ = (
+        UniqueConstraint("keyword_id", "predicted_at", name="uq_trend_predictions_keyword_predicted_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     keyword_id = Column(Integer, ForeignKey("trend_keywords.id"), nullable=False)
@@ -134,6 +141,14 @@ class KeywordItem(BaseModel):
     cat: str
     peak: int
     year: int
+
+class RealtimeItem(BaseModel):
+    id: int
+    name: str
+    cat: str
+    score: int
+    change_rate: float
+    collected_at: str
 
 class CycleResponse(BaseModel):
     keywords: list[KeywordItem]

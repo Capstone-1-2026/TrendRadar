@@ -1,4 +1,4 @@
-import { KEYWORDS, RANKING, SERIES_DATA, CAT_AVGS, catLabelMap } from '../data/keywords'
+import { KEYWORDS, catLabelMap } from '../data/keywords'
 import { PREDICTIONS, getProbBadge as getMockProbBadge } from '../data/predictions'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
@@ -24,6 +24,15 @@ const isHistoryItem = item =>
     VALID_DECLINE_CAUSES.has(item.decline_cause) &&
     isNumber(item.drop_rate) &&
     typeof item.summary === 'string'
+
+const isRealtimeItem = item =>
+    isObject(item) &&
+    isNumber(item.id) &&
+    typeof item.name === 'string' &&
+    VALID_CATS.has(item.cat) &&
+    isNumber(item.score) &&
+    isNumber(item.change_rate) &&
+    typeof item.collected_at === 'string'
 
 const isPredictItem = item =>
     isObject(item) &&
@@ -56,6 +65,47 @@ const validateArray = (data, validator, endpoint) => {
 }
 
 const normalizeCat = cat => (cat === 'snack' || cat === 'drink' ? 'food' : cat)
+
+const CURRENT_TRENDS = [
+    { id: 201, name: '러닝크루', cat: 'lifestyle', score: 89, peak: 89, year: 2026, change_rate: 42.5, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 202, name: '단백질 디저트', cat: 'food', score: 86, peak: 86, year: 2026, change_rate: 37.2, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 203, name: 'AI 쇼핑비서', cat: 'technology', score: 84, peak: 84, year: 2026, change_rate: 33.8, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 204, name: '초단편 드라마', cat: 'content', score: 81, peak: 81, year: 2026, change_rate: 28.6, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 205, name: '업사이클링 패션', cat: 'fashion', score: 77, peak: 77, year: 2026, change_rate: 21.4, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 206, name: '무알코올 페어링', cat: 'food', score: 73, peak: 73, year: 2026, change_rate: 18.9, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 207, name: '슬립테크 루틴', cat: 'technology', score: 70, peak: 70, year: 2026, change_rate: 15.7, collected_at: '2026-09-15T09:00:00+09:00' },
+    { id: 208, name: '로컬 팝업투어', cat: 'lifestyle', score: 67, peak: 67, year: 2026, change_rate: 12.1, collected_at: '2026-09-15T09:00:00+09:00' },
+]
+
+function genCurrentSeries(keywords) {
+    const labels = ['2026.04', '2026.05', '2026.06', '2026.07', '2026.08', '2026.09']
+    return labels.map((label, index) => {
+        const row = { label }
+        keywords.forEach(kw => {
+            const start = Math.max(12, kw.score - kw.change_rate - 18)
+            const step = (kw.score - start) / (labels.length - 1)
+            row[kw.name] = Math.round(start + step * index)
+        })
+        return row
+    })
+}
+
+function getCurrentCategoryAverages() {
+    const map = {}
+    CURRENT_TRENDS.forEach(kw => {
+        const cat = normalizeCat(kw.cat)
+        if (!map[cat]) map[cat] = { total: 0, count: 0 }
+        map[cat].total += kw.score
+        map[cat].count++
+    })
+
+    return Object.entries(map).map(([cat, value]) => ({
+        cat,
+        label: catLabelMap[cat] || cat,
+        avg: Math.round(value.total / value.count),
+        count: value.count,
+    }))
+}
 
 export const withApiBase = path => `${API_BASE_URL}/api/trends/${path.replace(/^\//, '')}`
 
@@ -102,8 +152,8 @@ export async function getRealtimeTrends() {
     return request(
         'realtime',
         {},
-        RANKING,
-        data => validateArray(data, isKeywordItem, '/realtime')
+        CURRENT_TRENDS,
+        data => validateArray(data, isRealtimeItem, '/realtime')
     )
 }
 
@@ -111,7 +161,7 @@ export async function getCycleData() {
     return request(
         'cycle',
         {},
-        { keywords: KEYWORDS, series: SERIES_DATA },
+        { keywords: CURRENT_TRENDS, series: genCurrentSeries(CURRENT_TRENDS) },
         data => {
             if (!isCycleResponse(data)) throw new Error('/cycle 응답 형식이 API_SPEC.md와 다릅니다.')
             return data
@@ -144,15 +194,10 @@ export async function getPredictions() {
 }
 
 export async function getDeclineSummary() {
-    const mockSummary = CAT_AVGS.map(item => ({
-        ...item,
-        count: item.count ?? KEYWORDS.filter(kw => normalizeCat(kw.cat) === item.cat).length,
-    }))
-
     return request(
         'decline',
         {},
-        mockSummary,
+        getCurrentCategoryAverages(),
         data => validateArray(data, isDeclineItem, '/decline')
     )
 }
