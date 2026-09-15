@@ -4,8 +4,9 @@ from api.trends import router as trends_router
 from database import engine, Base
 import models.schema  # 모든 모델 import (테이블 생성용)
 
-# Supabase에 테이블 자동 생성 (이미 있으면 스킵)
-Base.metadata.create_all(bind=engine)
+if engine is not None:
+    # Supabase에 테이블 자동 생성 (이미 있으면 스킵)
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="TrendRadar API",

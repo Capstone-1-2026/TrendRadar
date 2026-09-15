@@ -16,7 +16,13 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = None
+
+
+def get_supabase_client():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL 또는 SUPABASE_KEY가 .env에 없습니다.")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 카테고리 매핑
 KEYWORD_META = {
@@ -79,6 +85,9 @@ def get_keyword_id_map() -> dict:
 
 def run_pipeline():
     """전체 데이터 수집 → 정제 → DB 적재 파이프라인"""
+    global supabase
+    supabase = get_supabase_client()
+
     print("🚀 파이프라인 시작:", datetime.now())
 
     # 1. 키워드 기본 정보 적재
