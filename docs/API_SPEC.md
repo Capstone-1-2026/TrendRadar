@@ -10,12 +10,21 @@
 
 ## 1. GET `/api/trends/realtime`
 
-실시간 키워드 목록. peak 점수 내림차순.
+현재 뜨고 있는 키워드 목록. 최신 수집 스냅샷 기준 `change_rate` 내림차순.
 
-**응답**: `KeywordItem[]`
+**응답**: `RealtimeItem[]`
 
 ```json
-[{ "id": 1, "name": "탕후루", "cat": "food", "peak": 97, "year": 2022 }]
+[
+  {
+    "id": 201,
+    "name": "러닝크루",
+    "cat": "lifestyle",
+    "score": 89,
+    "change_rate": 42.5,
+    "collected_at": "2026-09-15T09:00:00+09:00"
+  }
+]
 ```
 
 | 필드 | 타입   | 설명                                                                                                     |
@@ -23,14 +32,17 @@
 | id   | int    | 키워드 ID                                                                                                |
 | name | string | 키워드명                                                                                                 |
 | cat  | string | 카테고리 (`food`, `fashion`, `content`, `technology`, `lifestyle`) — `snack`/`drink`는 `food`로 정규화됨 |
-| peak | int    | 최고 트렌드 스코어                                                                                       |
-| year | int    | 피크 연도                                                                                                |
+| score | int | 현재 트렌드 스코어 |
+| change_rate | float | 직전 비교 구간 대비 변화율(%) |
+| collected_at | string | 최신 수집 시각 |
+
+> `RealtimeItem`은 `peak`/`year`(과거 최고점 필드)를 포함하지 않습니다. History 페이지의 `HistoryItem`(peak/year 기반)과 의도적으로 분리되어 있으며, 과거 종료된 키워드가 "현재" 화면에 peak 값으로 노출되는 것을 막기 위한 구조입니다.
 
 ---
 
 ## 2. GET `/api/trends/cycle`
 
-타임라인 차트 + 워드클라우드용 월별 시계열 (2021.01 ~ 2026.03).
+현재 트렌드 타임라인 차트 + 워드클라우드용 월별 시계열.
 
 **응답**: `CycleResponse`
 
@@ -52,7 +64,7 @@
 
 ## 3. GET `/api/trends/history`
 
-히스토리 페이지용. 카테고리/연도 필터 + 하락 원인/하락률/AI 요약 포함.
+과거 유행 키워드 히스토리 페이지용. 카테고리/연도 필터 + 하락 원인/하락률/AI 요약 포함.
 
 **쿼리 파라미터**
 | 이름 | 타입 | 필수 | 설명 |
@@ -83,25 +95,23 @@
 
 ## 4. GET `/api/trends/predict`
 
-AI 예측 페이지용. 예측 확률(prob) 내림차순.
+다음 트렌드 후보 예측 페이지용. 예측 확률(prob) 내림차순.
 
 **응답**: `PredictItem[]`
 
 ```json
 [
   {
-    "id": 1,
-    "name": "두바이초콜릿",
+    "id": 101,
+    "name": "단백질 디저트",
     "cat": "food",
-    "prob": 82,
-    "score": 85,
+    "prob": 84,
+    "score": 82,
     "analysis": "..."
   }
 ]
 ```
 
-> ⚠️ 백엔드 mock(`backend/api/trends.py`)과 프론트 mock(`frontend/src/data/predictions.js`)의 예측 항목 데이터가 일부 다릅니다
-> (예: id 2가 백엔드는 `글로우스킨케어`, 프론트는 `AI피부진단`). 실제 DB 연동 전까지는 두 mock 중 하나로 통일 필요.
 > | 필드 | 타입 | 설명 |
 > |---|---|---|
 > | prob | int | 유행 가능성 % |

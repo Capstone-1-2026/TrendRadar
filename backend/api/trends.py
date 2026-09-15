@@ -1,10 +1,25 @@
-from fastapi import APIRouter, Query
+from collections import defaultdict
 from typing import Optional
-from models.schema import KeywordItem, CycleResponse, HistoryItem, PredictItem, DeclineItem
+
+from fastapi import APIRouter, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from database import SessionLocal
+from models.schema import (
+    CycleResponse,
+    DeclineEvent,
+    DeclineItem,
+    HistoryItem,
+    PredictItem,
+    RealtimeItem,
+    TrendHistory,
+    TrendKeyword,
+    TrendPrediction,
+    TrendRealtime,
+)
 
 router = APIRouter()
-
-# ── 원본 데이터 ────────────────────────────────────────────────────────────────
 
 _RAW_KEYWORDS = [
     {"id": 1,  "name": "허니버터칩",   "year": 2015, "cat": "snack",      "peak": 92},
@@ -19,107 +34,159 @@ _RAW_KEYWORDS = [
     {"id": 10, "name": "AI아트",       "year": 2024, "cat": "technology", "peak": 91},
 ]
 
+_CURRENT_TRENDS = [
+    {"id": 201, "name": "러닝크루", "year": 2026, "cat": "lifestyle", "peak": 89, "score": 89, "change_rate": 42.5, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 202, "name": "단백질 디저트", "year": 2026, "cat": "food", "peak": 86, "score": 86, "change_rate": 37.2, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 203, "name": "AI 쇼핑비서", "year": 2026, "cat": "technology", "peak": 84, "score": 84, "change_rate": 33.8, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 204, "name": "초단편 드라마", "year": 2026, "cat": "content", "peak": 81, "score": 81, "change_rate": 28.6, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 205, "name": "업사이클링 패션", "year": 2026, "cat": "fashion", "peak": 77, "score": 77, "change_rate": 21.4, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 206, "name": "무알코올 페어링", "year": 2026, "cat": "food", "peak": 73, "score": 73, "change_rate": 18.9, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 207, "name": "슬립테크 루틴", "year": 2026, "cat": "technology", "peak": 70, "score": 70, "change_rate": 15.7, "collected_at": "2026-09-15T09:00:00+09:00"},
+    {"id": 208, "name": "로컬 팝업투어", "year": 2026, "cat": "lifestyle", "peak": 67, "score": 67, "change_rate": 12.1, "collected_at": "2026-09-15T09:00:00+09:00"},
+]
+
 _PREDICTIONS = [
-    {"id": 1,  "name": "두바이초콜릿",     "cat": "food",      "prob": 82, "score": 85,
-     "analysis": "SNS 확산 속도와 검색량 증가율을 기반으로 높은 유행 가능성을 보입니다. 특히 20대 여성층에서 급격한 관심 증가가 감지되었으며, 글로벌 트렌드 연계성도 높게 나타났습니다."},
-    {"id": 2,  "name": "글로우스킨케어",   "cat": "fashion",   "prob": 75, "score": 79,
-     "analysis": "피부 광채 관련 뷰티 키워드 수요가 꾸준히 증가하고 있습니다. 뷰티 앱 다운로드 수와 관련 콘텐츠 소비량이 전년 대비 40% 이상 상승했습니다."},
-    {"id": 3,  "name": "하이볼칵테일",     "cat": "food",      "prob": 68, "score": 72,
-     "analysis": "홈술 문화의 확장과 함께 프리미엄 혼술 키워드가 부상하고 있습니다. 편의점 하이볼 상품 판매량이 전년 동기 대비 62% 증가했습니다."},
-    {"id": 4,  "name": "미니멀패션",       "cat": "fashion",   "prob": 61, "score": 65,
-     "analysis": "과잉 소비 반작용으로 간결하고 기능적인 스타일 수요가 증가하는 추세입니다."},
-    {"id": 5,  "name": "버추얼인플루언서", "cat": "content",   "prob": 54, "score": 58,
-     "analysis": "AI 생성 가상 인물에 대한 관심이 높아지고 있으나 아직 주류 단계는 아닙니다."},
-    {"id": 6,  "name": "제로웨이스트쿡",   "cat": "lifestyle", "prob": 47, "score": 51,
-     "analysis": "친환경 인식 확산에 따른 요리 트렌드로 관심은 있으나 실천율은 아직 낮은 편입니다."},
-    {"id": 7,  "name": "레트로게임카페",   "cat": "content",   "prob": 39, "score": 44,
-     "analysis": "Y2K 감성의 연장선으로 향수를 자극하는 오프라인 공간에 대한 수요가 있습니다."},
-    {"id": 8,  "name": "비건베이킹",       "cat": "food",      "prob": 31, "score": 36,
-     "analysis": "건강·윤리 소비 트렌드와 맞닿아 있으나 국내 소비자 수용도가 아직 낮습니다."},
-    {"id": 9,  "name": "스페이스코어패션", "cat": "fashion",   "prob": 22, "score": 27,
-     "analysis": "해외 패션 위크에서 등장하고 있으나 국내 트렌드 반영까지는 시간이 필요합니다."},
-    {"id": 10, "name": "달팽이슬라임",     "cat": "lifestyle", "prob": 14, "score": 18,
-     "analysis": "해외 숏폼에서 간헐적으로 바이럴되고 있으나 국내 확산 사례는 미미합니다."},
+    {"id": 101, "name": "단백질 디저트", "cat": "food", "prob": 84, "score": 82,
+     "analysis": "고단백 간식과 저당 디저트 관심이 함께 상승하고 있어 편의점, 카페, 홈트 소비층으로 확산 가능성이 높습니다."},
+    {"id": 102, "name": "AI 쇼핑비서", "cat": "technology", "prob": 79, "score": 77,
+     "analysis": "가격 비교, 사이즈 추천, 리뷰 요약 기능이 커머스 앱에 빠르게 붙으면서 개인화 쇼핑 도우미 수요가 커지고 있습니다."},
+    {"id": 103, "name": "로컬 러닝크루", "cat": "lifestyle", "prob": 72, "score": 74,
+     "analysis": "지역 기반 운동 모임과 기록 공유 문화가 결합되며 커뮤니티형 라이프스타일 트렌드로 성장할 가능성이 있습니다."},
+    {"id": 104, "name": "업사이클링 패션", "cat": "fashion", "prob": 65, "score": 68,
+     "analysis": "친환경 소비와 개성 있는 리폼 콘텐츠가 맞물리며 소규모 브랜드와 중고 플랫폼 중심으로 확산될 수 있습니다."},
+    {"id": 105, "name": "초단편 드라마", "cat": "content", "prob": 58, "score": 62,
+     "analysis": "숏폼 플랫폼에서 회차형 콘텐츠 소비가 늘면서 짧은 러닝타임의 연속극 포맷이 더 넓어질 가능성이 있습니다."},
+    {"id": 106, "name": "슬립테크 루틴", "cat": "technology", "prob": 49, "score": 54,
+     "analysis": "수면 측정 기기와 회복 중심 건강 관리 앱이 늘고 있으나 일상 사용 습관으로 자리 잡는지가 관건입니다."},
+    {"id": 107, "name": "무알코올 페어링", "cat": "food", "prob": 42, "score": 47,
+     "analysis": "저도수/무알코올 음료 관심은 꾸준하지만 외식 메뉴와 함께 소비되는 문화로 확장될지는 더 확인이 필요합니다."},
+    {"id": 108, "name": "책맥 모임", "cat": "lifestyle", "prob": 34, "score": 39,
+     "analysis": "독서 모임과 가벼운 취향 커뮤니티가 결합된 형태로 니치 수요는 있으나 대중 확산은 아직 제한적입니다."},
+    {"id": 109, "name": "AI 아바타 팬덤", "cat": "content", "prob": 27, "score": 31,
+     "analysis": "기술 관심은 높지만 지속적인 팬덤 소비로 이어지려면 캐릭터성과 서사가 더 필요합니다."},
+    {"id": 110, "name": "스마트 텃밭", "cat": "lifestyle", "prob": 18, "score": 24,
+     "analysis": "홈가드닝과 IoT가 맞닿아 있으나 설치 비용과 관리 난도가 있어 단기 대중화 가능성은 낮습니다."},
 ]
 
 _DECLINE_CAUSES = ["대체재 등장", "계절 종료", "공급 과잉", "부정 이슈", "자연 소멸"]
-
-_CAT_LABELS = {
-    "food": "음식", "fashion": "패션", "content": "콘텐츠",
-    "technology": "기술", "lifestyle": "라이프스타일",
-    "snack": "음식", "drink": "음식",
-}
-
 _DROP_RATES = {1: 18, 2: 32, 3: 15, 4: 41, 5: 23, 6: 12, 7: 27, 8: 35, 9: 20, 10: 29}
+_CAT_LABELS = {
+    "food": "음식",
+    "fashion": "패션",
+    "content": "콘텐츠",
+    "technology": "기술",
+    "lifestyle": "라이프스타일",
+    "snack": "음식",
+    "drink": "음식",
+}
 
 
 def _normalize_cat(cat: str) -> str:
-    """snack, drink → food 통합"""
     return "food" if cat in ("snack", "drink") else cat
 
 
 def _normalize_keywords():
-    """전체 키워드 cat 정규화 적용"""
-    return [
-        {**kw, "cat": _normalize_cat(kw["cat"])}
-        for kw in _RAW_KEYWORDS
-    ]
+    return [{**kw, "cat": _normalize_cat(kw["cat"])} for kw in _RAW_KEYWORDS]
 
 
-# ── 1. GET /api/trends/realtime ───────────────────────────────────────────────
-@router.get("/realtime", response_model=list[KeywordItem])
-def get_realtime():
-    """peak 점수 기준 내림차순 키워드 목록 반환"""
-    keywords = _normalize_keywords()
-    return sorted(keywords, key=lambda x: x["peak"], reverse=True)
+def _current_category_averages():
+    cat_data: dict[str, list[int]] = defaultdict(list)
+    for kw in _CURRENT_TRENDS:
+        cat_data[_normalize_cat(kw["cat"])].append(kw["score"])
+
+    return sorted(
+        [
+            {
+                "cat": cat,
+                "label": _CAT_LABELS.get(cat, cat),
+                "avg": round(sum(scores) / len(scores), 1),
+                "count": len(scores),
+            }
+            for cat, scores in cat_data.items()
+        ],
+        key=lambda x: x["avg"],
+        reverse=True,
+    )
 
 
-# ── 2. GET /api/trends/cycle ──────────────────────────────────────────────────
-@router.get("/cycle", response_model=CycleResponse)
-def get_cycle():
-    """타임라인 차트 + 워드클라우드용 월별 시계열 데이터 반환 (2021.01 ~ 2026.03)"""
-    keywords = _normalize_keywords()
-
-    # 2021.01 ~ 2026.03 월별 레이블 생성
-    months = []
-    for year in range(2021, 2027):
-        end_month = 4 if year == 2026 else 13
-        for month in range(1, end_month):
-            months.append((year, month))
-
+def _current_series():
+    labels = ["2026.04", "2026.05", "2026.06", "2026.07", "2026.08", "2026.09"]
     series = []
-    for year, month in months:
-        label = f"{year}.{month:02d}"
-        row: dict = {"label": label}
-        for kw in keywords:
-            # 피크 연도 기준 앞뒤 점수를 간단히 시뮬레이션
-            diff = (year - kw["year"]) * 12 + (month - 6)
-            if diff < -18:
-                score = 0
-            elif diff < 0:
-                score = round(kw["peak"] * (1 + diff / 18) * 0.8)
-            elif diff == 0:
-                score = kw["peak"]
-            elif diff <= 18:
-                score = round(kw["peak"] * (1 - diff / 18) * 0.9)
-            else:
-                score = 0
-            row[kw["name"]] = max(0, score)
+    for index, label in enumerate(labels):
+        row = {"label": label}
+        for kw in _CURRENT_TRENDS:
+            start = max(12, kw["score"] - kw["change_rate"] - 18)
+            step = (kw["score"] - start) / (len(labels) - 1)
+            row[kw["name"]] = round(start + step * index)
         series.append(row)
+    return series
 
-    return {"keywords": keywords, "series": series}
+
+def _db_session():
+    if SessionLocal is None:
+        return None
+    return SessionLocal()
 
 
-# ── 3. GET /api/trends/history ────────────────────────────────────────────────
-@router.get("/history", response_model=list[HistoryItem])
-def get_history(
-    cat: Optional[str] = Query(None, description="카테고리 필터 (food, fashion, content, technology, lifestyle)"),
-    year: Optional[int] = Query(None, description="연도 필터 (예: 2022)"),
-):
-    """히스토리 페이지용. 카테고리/연도 필터, 하락 원인·drop_rate·AI 요약 포함"""
-    keywords = _normalize_keywords()
+def _with_db(loader, fallback):
+    db = _db_session()
+    if db is None:
+        return fallback()
 
-    # 필터 적용
+    try:
+        data = loader(db)
+        return data or fallback()
+    except Exception:
+        return fallback()
+    finally:
+        db.close()
+
+
+def _keyword_item(keyword: TrendKeyword, peak: float, year: int) -> dict:
+    return {
+        "id": keyword.id,
+        "name": keyword.name,
+        "cat": _normalize_cat(keyword.category),
+        "peak": int(round(peak or 0)),
+        "year": int(year or 0),
+    }
+
+
+def _mock_realtime():
+    items = [
+        {
+            "id": kw["id"],
+            "name": kw["name"],
+            "cat": _normalize_cat(kw["cat"]),
+            "score": kw["score"],
+            "change_rate": kw["change_rate"],
+            "collected_at": kw["collected_at"],
+        }
+        for kw in _CURRENT_TRENDS
+    ]
+    return sorted(items, key=lambda x: x["score"], reverse=True)
+
+
+def _mock_cycle_keywords():
+    items = [
+        {
+            "id": kw["id"],
+            "name": kw["name"],
+            "cat": _normalize_cat(kw["cat"]),
+            "peak": kw["score"],
+            "year": int(kw["collected_at"][:4]),
+        }
+        for kw in _CURRENT_TRENDS
+    ]
+    return sorted(items, key=lambda x: x["peak"], reverse=True)
+
+
+def _mock_cycle():
+    return {"keywords": _mock_cycle_keywords(), "series": _current_series()}
+
+
+def _mock_history(cat: Optional[str], year: Optional[int]):
+    keywords = sorted(_normalize_keywords(), key=lambda x: x["peak"], reverse=True)
     if cat:
         keywords = [kw for kw in keywords if kw["cat"] == cat]
     if year:
@@ -129,46 +196,243 @@ def get_history(
     for kw in keywords:
         cause = _DECLINE_CAUSES[kw["id"] % 5]
         drop = _DROP_RATES.get(kw["id"], 20)
-        summary = (
-            f"{kw['name']}은(는) {kw['year']}년 {_CAT_LABELS.get(kw['cat'], kw['cat'])} "
-            f"카테고리에서 최고 스코어 {kw['peak']}점을 기록했습니다. "
-            f"이후 {cause} 원인으로 {drop}% 하락세를 보였습니다."
-        )
         result.append({
             **kw,
             "decline_cause": cause,
             "drop_rate": drop,
-            "summary": summary,
+            "summary": (
+                f"{kw['name']}은(는) {kw['year']}년 {_CAT_LABELS.get(kw['cat'], kw['cat'])} "
+                f"카테고리에서 최고 스코어 {kw['peak']}점을 기록했습니다. "
+                f"이후 {cause} 원인으로 {drop}% 하락세를 보였습니다."
+            ),
         })
-
     return result
 
 
-# ── 4. GET /api/trends/predict ────────────────────────────────────────────────
-@router.get("/predict", response_model=list[PredictItem])
-def get_predict():
-    """AI 예측 페이지용. 예측 확률(prob) 내림차순 반환"""
+def _mock_predict():
     return sorted(_PREDICTIONS, key=lambda x: x["prob"], reverse=True)
 
 
-# ── 5. GET /api/trends/decline ────────────────────────────────────────────────
-@router.get("/decline", response_model=list[DeclineItem])
-def get_decline():
-    """히스토리 페이지 카테고리 요약 카드용. 카테고리별 평균 스코어·키워드 수 반환"""
-    keywords = _normalize_keywords()
+def _mock_decline():
+    return _current_category_averages()
 
-    # 카테고리별 집계
-    cat_data: dict[str, list[int]] = {}
-    for kw in keywords:
-        cat_data.setdefault(kw["cat"], []).append(kw["peak"])
+
+def _load_realtime(db: Session):
+    latest_subquery = (
+        db.query(
+            TrendRealtime.keyword_id,
+            func.max(TrendRealtime.collected_at).label("latest_collected_at"),
+        )
+        .group_by(TrendRealtime.keyword_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(TrendKeyword, TrendRealtime)
+        .join(TrendRealtime, TrendRealtime.keyword_id == TrendKeyword.id)
+        .join(
+            latest_subquery,
+            (latest_subquery.c.keyword_id == TrendRealtime.keyword_id)
+            & (latest_subquery.c.latest_collected_at == TrendRealtime.collected_at),
+        )
+        .all()
+    )
+
+    items = [
+        {
+            "id": keyword.id,
+            "name": keyword.name,
+            "cat": _normalize_cat(keyword.category),
+            "score": int(round(realtime.trend_score or 0)),
+            "change_rate": round(float(realtime.change_rate or 0), 1),
+            "collected_at": realtime.collected_at.isoformat(),
+        }
+        for keyword, realtime in rows
+        if realtime.trend_score is not None and realtime.collected_at is not None
+    ]
+    return sorted(items, key=lambda x: x["change_rate"], reverse=True)
+
+
+def _load_cycle(db: Session):
+    rows = (
+        db.query(TrendKeyword, TrendHistory)
+        .join(TrendHistory, TrendHistory.keyword_id == TrendKeyword.id)
+        .order_by(TrendHistory.date.asc(), TrendKeyword.name.asc())
+        .all()
+    )
+    if not rows:
+        return None
+
+    keyword_peaks = {}
+    series_map = defaultdict(dict)
+    for keyword, history in rows:
+        if history.trend_score is None or history.date is None:
+            continue
+        current_peak = keyword_peaks.get(keyword.id)
+        if current_peak is None or history.trend_score > current_peak["peak"]:
+            keyword_peaks[keyword.id] = _keyword_item(keyword, history.trend_score, history.year)
+
+        label = f"{history.year}.{history.month:02d}"
+        series_map[label][keyword.name] = int(round(history.trend_score))
+
+    if not keyword_peaks or not series_map:
+        return None
+
+    return {
+        "keywords": sorted(keyword_peaks.values(), key=lambda x: x["peak"], reverse=True),
+        "series": [{"label": label, **scores} for label, scores in sorted(series_map.items())],
+    }
+
+
+def _load_history(db: Session, cat: Optional[str], year: Optional[int]):
+    peak_subquery = (
+        db.query(
+            TrendHistory.keyword_id,
+            func.max(TrendHistory.trend_score).label("peak"),
+        )
+        .group_by(TrendHistory.keyword_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(TrendKeyword, peak_subquery.c.peak, TrendHistory.year, DeclineEvent)
+        .join(peak_subquery, peak_subquery.c.keyword_id == TrendKeyword.id)
+        .join(
+            TrendHistory,
+            (TrendHistory.keyword_id == TrendKeyword.id)
+            & (TrendHistory.trend_score == peak_subquery.c.peak),
+        )
+        .outerjoin(DeclineEvent, DeclineEvent.keyword_id == TrendKeyword.id)
+        .all()
+    )
 
     result = []
-    for cat, scores in cat_data.items():
+    seen = set()
+    for keyword, peak, peak_year, decline in rows:
+        if keyword.id in seen:
+            continue
+        seen.add(keyword.id)
+        normalized_cat = _normalize_cat(keyword.category)
+        if cat and normalized_cat != cat:
+            continue
+        if year and peak_year != year:
+            continue
+
+        cause = decline.cause_type if decline and decline.cause_type else "자연 소멸"
+        drop_rate = int(round(decline.decline_rate)) if decline and decline.decline_rate is not None else 0
+        result.append({
+            "id": keyword.id,
+            "name": keyword.name,
+            "cat": normalized_cat,
+            "peak": int(round(peak or 0)),
+            "year": int(peak_year or 0),
+            "decline_cause": cause,
+            "drop_rate": drop_rate,
+            "summary": (
+                f"{keyword.name}은(는) {peak_year}년 {_CAT_LABELS.get(normalized_cat, normalized_cat)} "
+                f"카테고리에서 최고 스코어 {int(round(peak or 0))}점을 기록했습니다. "
+                f"이후 {cause} 원인으로 {drop_rate}% 하락세를 보였습니다."
+            ),
+        })
+
+    return sorted(result, key=lambda x: x["peak"], reverse=True)
+
+
+def _load_predict(db: Session):
+    latest_subquery = (
+        db.query(
+            TrendPrediction.keyword_id,
+            func.max(TrendPrediction.predicted_at).label("latest_predicted_at"),
+        )
+        .group_by(TrendPrediction.keyword_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(TrendKeyword, TrendPrediction)
+        .join(TrendPrediction, TrendPrediction.keyword_id == TrendKeyword.id)
+        .join(
+            latest_subquery,
+            (latest_subquery.c.keyword_id == TrendPrediction.keyword_id)
+            & (latest_subquery.c.latest_predicted_at == TrendPrediction.predicted_at),
+        )
+        .all()
+    )
+
+    result = []
+    for keyword, prediction in rows:
+        prob = int(round((prediction.prob or 0) * 100 if (prediction.prob or 0) <= 1 else prediction.prob or 0))
+        score = int(round(prediction.trend_score or 0))
+        result.append({
+            "id": keyword.id,
+            "name": keyword.name,
+            "cat": _normalize_cat(keyword.category),
+            "prob": prob,
+            "score": score,
+            "analysis": f"{keyword.name}의 향후 트렌드 스코어는 {score}점으로 예측되며 유행 가능성은 {prob}%입니다.",
+        })
+
+    return sorted(result, key=lambda x: x["prob"], reverse=True)
+
+
+def _load_decline(db: Session):
+    rows = (
+        db.query(
+            TrendKeyword.category,
+            func.avg(TrendHistory.trend_score).label("avg_score"),
+            func.count(func.distinct(TrendKeyword.id)).label("keyword_count"),
+        )
+        .join(TrendHistory, TrendHistory.keyword_id == TrendKeyword.id)
+        .group_by(TrendKeyword.category)
+        .all()
+    )
+    if not rows:
+        return None
+
+    merged = defaultdict(lambda: {"total": 0.0, "count": 0})
+    for category, avg_score, keyword_count in rows:
+        cat = _normalize_cat(category)
+        merged[cat]["total"] += float(avg_score or 0) * int(keyword_count or 0)
+        merged[cat]["count"] += int(keyword_count or 0)
+
+    result = []
+    for cat, values in merged.items():
+        count = values["count"]
+        if not count:
+            continue
         result.append({
             "cat": cat,
             "label": _CAT_LABELS.get(cat, cat),
-            "avg": round(sum(scores) / len(scores), 1),
-            "count": len(scores),
+            "avg": round(values["total"] / count, 1),
+            "count": count,
         })
 
     return sorted(result, key=lambda x: x["avg"], reverse=True)
+
+
+@router.get("/realtime", response_model=list[RealtimeItem])
+def get_realtime():
+    return _with_db(_load_realtime, _mock_realtime)
+
+
+@router.get("/cycle", response_model=CycleResponse)
+def get_cycle():
+    return _with_db(_load_cycle, _mock_cycle)
+
+
+@router.get("/history", response_model=list[HistoryItem])
+def get_history(
+    cat: Optional[str] = Query(None, description="카테고리 필터 (food, fashion, content, technology, lifestyle)"),
+    year: Optional[int] = Query(None, description="연도 필터 (예: 2022)"),
+):
+    return _with_db(lambda db: _load_history(db, cat, year), lambda: _mock_history(cat, year))
+
+
+@router.get("/predict", response_model=list[PredictItem])
+def get_predict():
+    return _with_db(_load_predict, _mock_predict)
+
+
+@router.get("/decline", response_model=list[DeclineItem])
+def get_decline():
+    return _with_db(_load_decline, _mock_decline)
