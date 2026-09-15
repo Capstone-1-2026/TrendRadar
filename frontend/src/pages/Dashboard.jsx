@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceArea } from 'recharts'
-import { useTheme } from '../context/ThemeContext'
-import { KEYWORDS, RANKING, SERIES_DATA, CAT_AVGS } from '../data/keywords'
+import { useTheme } from '../context/theme'
+import { getCycleData, getDeclineSummary, getRealtimeTrends } from '../api/trends'
 import Card from '../components/common/Card'
 import Badge from '../components/common/Badge'
 import ProgressBar from '../components/common/ProgressBar'
 import SectionTitle from '../components/common/SectionTitle'
+import StateMessage from '../components/common/StateMessage'
 import WordCloud from '../components/common/WordCloud'
 import { DarkTooltip, BarDarkTooltip } from '../components/common/Tooltips'
 import { Icons, catIconMap } from '../components/icons/Icons'
@@ -16,38 +17,88 @@ const LINE_COLORS = [
     '#F472B6', '#38BDF8', '#FBBF24', '#A78BFA', '#86EFAC', '#FDA4AF',
 ]
 
-export default function Dashboard({ setPage }) {
+const CAT_LABEL_MAP = {
+    food: '음식', snack: '음식', drink: '음식',
+    fashion: '패션', content: '콘텐츠',
+    technology: '기술', lifestyle: '라이프',
+}
+
+const matchesSearch = (item, query) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return [item.name, item.cat, CAT_LABEL_MAP[item.cat]]
+        .filter(Boolean)
+        .some(value => value.toLowerCase().includes(q))
+}
+
+export default function Dashboard({ searchQuery = '' }) {
     const { T } = useTheme()
     const now = useNow()
-    const [activeLines, setActiveLines] = useState(() => {
-        const init = {}
-        KEYWORDS.forEach(kw => { init[kw.name] = true })
-        return init
-    })
+    const [keywords, setKeywords] = useState([])
+    const [series, setSeries] = useState([])
+    const [catAvgs, setCatAvgs] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
+    const visibleKeywords = keywords.filter(kw => matchesSearch(kw, searchQuery))
+    const ranking = [...visibleKeywords].sort((a, b) => b.peak - a.peak)
+    const [activeLines, setActiveLines] = useState({})
     const [chartMounted, setChartMounted] = useState(false)
     const [zoomDomain, setZoomDomain] = useState(null)
     const [selecting, setSelecting] = useState(false)
     const [selectStart, setSelectStart] = useState(null)
     const [selectEnd, setSelectEnd] = useState(null)
+    const [hoveredSummaryId, setHoveredSummaryId] = useState(null)
 
     useEffect(() => {
         const id = setTimeout(() => setChartMounted(true), 80)
         return () => clearTimeout(id)
     }, [])
 
+    useEffect(() => {
+        let alive = true
+
+        async function loadDashboard() {
+            setLoading(true)
+            setError(null)
+            try {
+                const [realtime, cycle, decline] = await Promise.all([
+                    getRealtimeTrends(),
+                    getCycleData(),
+                    getDeclineSummary(),
+                ])
+                if (!alive) return
+                setKeywords(realtime)
+                setSeries(cycle.series || [])
+                setCatAvgs(decline)
+                setActiveLines(prev => {
+                    const next = {}
+                    realtime.forEach(kw => { next[kw.name] = prev[kw.name] ?? true })
+                    return next
+                })
+            } catch (err) {
+                if (alive) setError(err.message || '데이터를 불러오지 못했습니다.')
+            } finally {
+                if (alive) setLoading(false)
+            }
+        }
+
+        loadDashboard()
+        return () => { alive = false }
+    }, [])
+
     const toggleLine = name => setActiveLines(prev => ({ ...prev, [name]: !prev[name] }))
 
     const displayData = useMemo(() => {
-        if (!zoomDomain) return SERIES_DATA
+        if (!zoomDomain) return series
         const [l, r] = zoomDomain
-        return SERIES_DATA.slice(l, r + 1)
-    }, [zoomDomain])
+        return series.slice(l, r + 1)
+    }, [series, zoomDomain])
 
-    const avgScore = Math.round(KEYWORDS.reduce((s, k) => s + k.peak, 0) / KEYWORDS.length)
-    const upCount = KEYWORDS.filter(k => k.peak >= 90).length
-    const downCount = KEYWORDS.filter(k => k.peak < 85).length
+    const avgScore = visibleKeywords.length ? Math.round(visibleKeywords.reduce((s, k) => s + k.peak, 0) / visibleKeywords.length) : 0
+    const upCount = visibleKeywords.filter(k => k.peak >= 90).length
+    const downCount = visibleKeywords.filter(k => k.peak < 85).length
 
-    const wcItems = KEYWORDS.map(kw => ({
+    const wcItems = visibleKeywords.map(kw => ({
         id: kw.id, name: kw.name,
         size: Math.round(11 + (kw.peak / 100) * 24),
         color: kw.peak >= 90 ? T.up : kw.peak >= 85 ? T.accent : T.muted,
@@ -55,8 +106,8 @@ export default function Dashboard({ setPage }) {
 
     const handleZoomSelect = (e) => {
         if (!selecting || !selectStart || !e) return
-        const idx = SERIES_DATA.findIndex(d => d.label === e.activeLabel)
-        const startIdx = SERIES_DATA.findIndex(d => d.label === selectStart)
+        const idx = series.findIndex(d => d.label === e.activeLabel)
+        const startIdx = series.findIndex(d => d.label === selectStart)
         if (idx < 0 || startIdx < 0) return
         const l = Math.min(startIdx, idx)
         const r = Math.max(startIdx, idx)
@@ -74,6 +125,24 @@ export default function Dashboard({ setPage }) {
         display: 'flex', alignItems: 'center', gap: 5,
     })
 
+    if (loading) {
+        return (
+            <StateMessage>트렌드 데이터를 불러오는 중입니다.</StateMessage>
+        )
+    }
+
+    if (error) {
+        return (
+            <StateMessage tone="error">{error}</StateMessage>
+        )
+    }
+
+    if (!keywords.length) {
+        return (
+            <StateMessage>표시할 트렌드 데이터가 없습니다.</StateMessage>
+        )
+    }
+
     return (
         <div>
             {/* 페이지 헤더 */}
@@ -85,7 +154,7 @@ export default function Dashboard({ setPage }) {
             {/* 요약 카드 4종 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
                 {[
-                    { label: '활성 트렌드', value: KEYWORDS.length, unit: '개', Icon: Icons.Fire, color: '#D4A574', clickable: false },
+                    { label: '활성 트렌드', value: visibleKeywords.length, unit: '개', Icon: Icons.Fire, color: '#D4A574', clickable: false },
                     {
                         label: '평균 트렌드 스코어', value: avgScore, unit: '점', Icon: Icons.Chart, color: T.accent, clickable: false,
                         tooltip: '네이버 DataLab 50% + YouTube 30% + 계절 보정 20%'
@@ -93,7 +162,6 @@ export default function Dashboard({ setPage }) {
                     { label: '상승 키워드', value: upCount, unit: '개', Icon: Icons.TrendUp, color: T.up, clickable: true },
                     { label: '하락 키워드', value: downCount, unit: '개', Icon: Icons.TrendDown, color: T.down, clickable: true },
                 ].map((s, i) => {
-                    const [showTip, setShowTip] = useState(false)
                     return (
                         <Card
                             key={i} hoverable={s.clickable}
@@ -106,8 +174,8 @@ export default function Dashboard({ setPage }) {
                                         <p style={{ fontSize: 11, color: T.muted }}>{s.label}</p>
                                         {s.tooltip && (
                                             <span style={{ cursor: 'help' }}
-                                                onMouseEnter={() => setShowTip(true)}
-                                                onMouseLeave={() => setShowTip(false)}
+                                                onMouseEnter={() => setHoveredSummaryId(i)}
+                                                onMouseLeave={() => setHoveredSummaryId(null)}
                                             >
                                                 <Icons.Info size={12} color={T.muted} />
                                             </span>
@@ -120,7 +188,7 @@ export default function Dashboard({ setPage }) {
                                 </div>
                                 <s.Icon size={20} color={s.color} />
                             </div>
-                            {s.tooltip && showTip && (
+                            {s.tooltip && hoveredSummaryId === i && (
                                 <div style={{
                                     position: 'absolute', top: '105%', left: 0, right: 0, zIndex: 20,
                                     background: T.cardInner, border: `1px solid ${T.border}`,
@@ -142,6 +210,12 @@ export default function Dashboard({ setPage }) {
             </div>
 
             {/* 타임라인 + 랭킹 2열 */}
+            {searchQuery.trim() && !visibleKeywords.length && (
+                <Card style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize: 13, color: T.muted }}>"{searchQuery}" 검색 결과가 없습니다.</p>
+                </Card>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginBottom: 20, alignItems: 'start' }}>
                 {/* 타임라인 */}
                 <Card style={{ minWidth: 0 }}>
@@ -158,7 +232,7 @@ export default function Dashboard({ setPage }) {
                                 </button>
                             )}
                             <button onClick={() => {
-                                const cur = zoomDomain || [0, SERIES_DATA.length - 1]
+                                const cur = zoomDomain || [0, series.length - 1]
                                 const range = cur[1] - cur[0]
                                 const half = Math.floor(range / 4)
                                 if (range - half * 2 < 3) return
@@ -170,7 +244,7 @@ export default function Dashboard({ setPage }) {
                                 if (!zoomDomain) return
                                 const [l, r] = zoomDomain
                                 const expand = Math.floor((r - l) / 3)
-                                setZoomDomain([Math.max(0, l - expand), Math.min(SERIES_DATA.length - 1, r + expand)])
+                                setZoomDomain([Math.max(0, l - expand), Math.min(series.length - 1, r + expand)])
                             }} style={btnBase(false)}>
                                 <Icons.ZoomOut size={13} color={T.muted} />
                             </button>
@@ -179,9 +253,9 @@ export default function Dashboard({ setPage }) {
 
                     {/* 순위 버튼 */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                        {RANKING.map((kw, i) => {
+                        {ranking.map((kw, i) => {
                             const on = activeLines[kw.name]
-                            const c = LINE_COLORS[KEYWORDS.findIndex(k => k.id === kw.id)]
+                            const c = LINE_COLORS[keywords.findIndex(k => k.id === kw.id)]
                             return (
                                 <button key={kw.name} onClick={() => toggleLine(kw.name)} style={{
                                     ...btnBase(on, c),
@@ -219,15 +293,17 @@ export default function Dashboard({ setPage }) {
                                     {selecting && selectStart && selectEnd && (
                                         <ReferenceArea x1={selectStart} x2={selectEnd} fill={`${T.accent}15`} stroke={T.accent} strokeOpacity={0.5} />
                                     )}
-                                    {KEYWORDS.map((kw, i) => (
-                                        activeLines[kw.name] && (
+                                    {visibleKeywords.map((kw) => {
+                                        const colorIndex = keywords.findIndex(k => k.id === kw.id)
+                                        const color = LINE_COLORS[colorIndex]
+                                        return activeLines[kw.name] && (
                                             <Line key={kw.name} type="monotone" dataKey={kw.name}
-                                                stroke={LINE_COLORS[i]} strokeWidth={1.8} dot={false}
-                                                activeDot={{ r: 4, strokeWidth: 0, fill: LINE_COLORS[i] }}
+                                                stroke={color} strokeWidth={1.8} dot={false}
+                                                activeDot={{ r: 4, strokeWidth: 0, fill: color }}
                                                 isAnimationActive animationDuration={900} animationEasing="ease-in-out"
                                             />
                                         )
-                                    ))}
+                                    })}
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -243,7 +319,7 @@ export default function Dashboard({ setPage }) {
                         </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        {RANKING.map((kw, i) => {
+                        {ranking.map((kw, i) => {
                             const CatIcon = catIconMap[kw.cat] || Icons.Tag
                             const isUp = kw.peak >= 90
                             const isDown = kw.peak < 85
@@ -291,13 +367,13 @@ export default function Dashboard({ setPage }) {
                     <SectionTitle icon={<Icons.Box size={15} color={T.accent} />} title="카테고리별 트렌드" sub="카테고리 평균 트렌드 스코어" />
                     <div style={{ height: 200 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={CAT_AVGS} layout="vertical" margin={{ top: 4, right: 28, left: 18, bottom: 4 }}>
+                            <BarChart data={catAvgs} layout="vertical" margin={{ top: 4, right: 28, left: 18, bottom: 4 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
                                 <XAxis type="number" domain={[0, 100]} tick={{ fill: T.muted, fontSize: 9 }} tickLine={false} axisLine={{ stroke: T.border }} />
                                 <YAxis type="category" dataKey="label" tick={{ fill: T.textSoft, fontSize: 11 }} tickLine={false} axisLine={false} width={68} />
                                 <Tooltip content={<BarDarkTooltip />} />
                                 <Bar dataKey="avg" radius={[0, 5, 5, 0]} isAnimationActive animationDuration={900}>
-                                    {CAT_AVGS.map((entry, i) => <Cell key={i} fill={T.catColors[entry.cat] || T.muted} />)}
+                                    {catAvgs.map((entry, i) => <Cell key={i} fill={T.catColors[entry.cat] || T.muted} />)}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
