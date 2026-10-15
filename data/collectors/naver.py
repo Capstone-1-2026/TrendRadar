@@ -26,12 +26,13 @@ KEYWORDS = [
 ]
 
 
-def get_naver_trend(keywords: list, start_date: str, end_date: str) -> dict:
+def get_naver_trend(keywords: list, start_date: str, end_date: str, time_unit: str = "month") -> dict:
     """
     네이버 데이터랩 검색어 트렌드 API 호출
     keywords: 키워드 리스트 (최대 5개)
     start_date: 시작일 (YYYY-MM-DD)
     end_date: 종료일 (YYYY-MM-DD)
+    time_unit: "month"(월별) 또는 "date"(일별, 실시간 수집용)
     """
     url = "https://openapi.naver.com/v1/datalab/search"
 
@@ -46,7 +47,7 @@ def get_naver_trend(keywords: list, start_date: str, end_date: str) -> dict:
     body = {
         "startDate": start_date,
         "endDate": end_date,
-        "timeUnit": "month",
+        "timeUnit": time_unit,
         "keywordGroups": keyword_groups,
     }
 

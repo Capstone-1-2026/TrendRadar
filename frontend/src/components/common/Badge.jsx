@@ -1,4 +1,4 @@
-import { useTheme } from '../../context/ThemeContext'
+import { useTheme } from '../../context/theme'
 
 export default function Badge({ children, color, bg, style: s = {} }) {
     const { T } = useTheme()

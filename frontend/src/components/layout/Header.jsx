@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTheme } from '../../context/ThemeContext'
+import { useTheme } from '../../context/theme'
 import { Icons } from '../icons/Icons'
 
 export default function Header({ searchQuery, setSearchQuery }) {

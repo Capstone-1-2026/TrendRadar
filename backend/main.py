@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.trends import router as trends_router
+from database import engine, Base
+import models.schema  # 모든 모델 import (테이블 생성용)
+
+if engine is not None:
+    # Supabase에 테이블 자동 생성 (이미 있으면 스킵)
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="TrendRadar API",
@@ -10,7 +16,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite 기본 포트
+    allow_origins=["http://localhost:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):517\d",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

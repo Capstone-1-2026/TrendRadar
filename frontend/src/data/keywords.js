@@ -1,14 +1,14 @@
 export const KEYWORDS = [
-    { id: 1, name: '허니버터칩', year: 2015, cat: 'snack', peak: 92 },
-    { id: 2, name: '흑당버블티', year: 2018, cat: 'drink', peak: 90 },
-    { id: 3, name: '달고나커피', year: 2020, cat: 'food', peak: 95 },
-    { id: 4, name: '마라탕', year: 2019, cat: 'food', peak: 88 },
-    { id: 5, name: '탕후루', year: 2022, cat: 'food', peak: 97 },
-    { id: 6, name: '두바이초콜릿', year: 2024, cat: 'food', peak: 85 },
-    { id: 7, name: 'Y2K패션', year: 2022, cat: 'fashion', peak: 88 },
-    { id: 8, name: '레트로무드', year: 2023, cat: 'fashion', peak: 82 },
-    { id: 9, name: '숏폼콘텐츠', year: 2022, cat: 'content', peak: 94 },
-    { id: 10, name: 'AI아트', year: 2024, cat: 'technology', peak: 91 },
+    { id: 1, name: '허니버터칩', year: 2015, month: 8, cat: 'snack', peak: 92 },
+    { id: 2, name: '흑당버블티', year: 2018, month: 7, cat: 'drink', peak: 90 },
+    { id: 3, name: '달고나커피', year: 2020, month: 4, cat: 'food', peak: 95 },
+    { id: 4, name: '마라탕', year: 2019, month: 11, cat: 'food', peak: 88 },
+    { id: 5, name: '탕후루', year: 2022, month: 10, cat: 'food', peak: 97 },
+    { id: 6, name: '두바이초콜릿', year: 2024, month: 6, cat: 'food', peak: 85 },
+    { id: 7, name: 'Y2K패션', year: 2022, month: 5, cat: 'fashion', peak: 88 },
+    { id: 8, name: '레트로무드', year: 2023, month: 9, cat: 'fashion', peak: 82 },
+    { id: 9, name: '숏폼콘텐츠', year: 2022, month: 3, cat: 'content', peak: 94 },
+    { id: 10, name: 'AI아트', year: 2024, month: 12, cat: 'technology', peak: 91 },
 ]
 
 export const RANKING = [...KEYWORDS].sort((a, b) => b.peak - a.peak)
@@ -59,5 +59,6 @@ export const CAT_AVGS = (() => {
     return Object.entries(map).map(([cat, v]) => ({
         cat, label: korNames[cat] || cat,
         avg: Math.round(v.total / v.count),
+        count: v.count,
     }))
 })()
