@@ -1,24 +1,29 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from supabase import create_client, Client
+from sqlalchemy.orm import declarative_base
 from dotenv import load_dotenv
 import os
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
-# .env에서 DATABASE_URL 직접 읽기
-DATABASE_URL = os.getenv("DATABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 Base = declarative_base()
-engine = create_engine(DATABASE_URL) if DATABASE_URL else None
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine) if engine else None
+engine = None
 
+try:
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        SessionLocal = supabase
+        print("✅ Supabase 연결 성공")
+    else:
+        print("⚠️ SUPABASE_URL 또는 SUPABASE_KEY 없음 → 목업 모드")
+        supabase = None
+        SessionLocal = None
+except Exception as e:
+    print(f"⚠️ Supabase 연결 실패 → 목업 모드: {e}")
+    supabase = None
+    SessionLocal = None
 
-def get_db():
-    if SessionLocal is None:
-        raise RuntimeError(".env 파일에 DATABASE_URL이 없어 DB 세션을 만들 수 없습니다.")
-
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def get_supabase():
+    return supabase
